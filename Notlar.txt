@@ -1,0 +1,96 @@
+1-ETrade.Dal a TradeContext Class ý ekle , ( ETrade.Ul Set as start up project )
+
+2-ETrade.Entity ye Abstracts ve Concretes new folderlarý ekle
+
+3-BasketMaster : SipariþNo(KEY),Tarih,MüþteriId
+  BasketDetail : SipariþNo(Masterdan çeker),UrunId.  [ SipariþNo ve UrunId (compositeKey) ]
+
+4-Program.cs e þunu ekle:
+
+builder.Services.AddDbContext<TradeContext>(options =>
+       options.UseSqlServer(builder.Configuration.GetConnectionString("Baglanti")));
+
+5-appsettings e þunu ekle:
+
+  "ConnectionStrings": {
+    "Baglanti": "Server=DESKTOP-4GKM6HK\\SQLEXPRESS;Database=ETrade;Trusted_Connection=True;"
+  },
+
+6-ETrade.Dal Dependencies e add project referance - ETrade.Entity ve Etrade.Dal
+    ETrade.Ul Dependencies e add project referans - all
+
+7-TradeContext e DbSet leri yaz
+  þunlarý da yaz:
+
+ protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<BasketDetail>()
+                .HasKey(b => new {b.Id,b.ProductId});
+        }
+
+8-Add-Migration ilk yap ( defalt project: ETrade.Dal olmalý(context i içeren ))
+
+Migration da
+ onDelete: ReferentialAction.NoAction);    yerine
+ onDelete: ReferentialAction.NoAction);   yazdýk
+ NoAction de sildiðin veriye baðlý diðer tablolardaki veriler de silinir
+ NoAction da diðerleri silinmez
+
+9-Update-Database yap
+
+10-ETradeCore a IBaseRepository ve BaseRepository aç
+
+11-ETrade.Repos Dependencies e add project referance - ETrade.Entity ve Etrade.Dto ve ETrade.Core
+   ETradeRepos a Abstracts folderi aç ve interfaceleri ekle, Concretes folderý aç ve classlarý ekle
+
+12- Etrade.Uw Dependencies e add project referance - Etrade.Ul hariç hepsi
+    IUnitOfWork ve UnitOfWork aç
+
+13- Program.cs e builder.Services.AddScoped larý yaz
+
+14- nuget packetsdan  BCrypt.Net-Next indir (Etrade.Repos u seç)
+
+15-CityModel, CityController oluþtur, view ekle, program cs e addscoped Citymodel
+   CategoriesModel, CategoriesController oluþtur, view ekle, program cs e addscoped CategoriesModel
+   UnitModel, UnitController oluþtur, view ekle, program cs e addscoped Unitmodel
+
+16- Layout a üyeol,giriþ,çýkýþ <li> lerini ekle.
+17- AuthController aç.Ve
+    Register a empty view oluþtur.(içini boostrap de form control den copy yapýp sonra düzenleyebilirsin)
+18-ilçe seçtirebilmek için UsersModel oluþtur, programcs de addscoped yap
+AuthControllara da þunu ekle:
+ public class AuthController : Controller
+    {
+        UsersModel _model;
+        IUnitOfWork _uow;
+        public AuthController(UsersModel model,IUnitOfWork uow)
+        {
+            _model = model;
+            _uow = uow;
+        }
+
+19- Register view e    @model ETrade.Ul.Models.UsersModel  ekle ve içini tekrar düzelt
+ 
+ 20- sql de il ve ilçe giriþi yap 
+
+ 21- IUsersRep e   Users CreateUser(Users u); yaz
+     UsersRep de  using BCrypt;  ekle ve þunu yaz:
+
+        public Users CreateUser(Users u)
+        {
+            u.Password = BCrypt.Net.BCrypt.HashPassword(u.Password);
+            return u;
+        }
+
+22- Session tarayýcý veri tabanýnda bir süre duran veri log in olursa oluþur log out da kaybolur. Session sunucu da durur cookies clientta durur yani telefon hafýzasý falan gibi.
+
+23- BasketMaster layout'a eklendi ve  BasketMasterController yapýldý.
+
+24- BasketDetailController eklendi.
+
+25- BasketMaster entity içine bool Completed eklendi.
+
+26- BasketDetail entity ve dal içinde kompozit keyler deðiþtirildi.
+
+
+

@@ -1,0 +1,468 @@
+ETRADE GENEL YAPININ OLUŞTURULMASI
+
+1- Tüm class libraryler solution a eklenir.
+	a- ETrade.Dal ( içinde otomatik oluşan class silinir )
+	b- ETrade.Core ( içinde otomatik oluşan class silinir )
+	c- ETrade.Repos ( içinde otomatik oluşan class silinir )
+	d- ETrade.Entity ( içinde otomatik oluşan class silinir )
+	e- ETrade.DTO ( içinde otomatik oluşan class silinir )
+	f- ETrade.Uw ( içinde otomatik oluşan class silinir )
+
+2- Solution a asp.net model mvc projesi eklenir
+	g- ETrade.UI
+
+3- Solution a sağ tıklanır nuget paketler toplu olarak tüm katmanlara yüklenir.
+	a- Microsoft.EntityFrameworkCore
+	b- Microsoft.EntityFrameworkCore.SqlServer
+	c- Microsoft.EntityFrameworkCore.Tools
+
+KATMANLARA VERİ GİRİŞİ
+
+1- ETrade.Dal içine TradeContext ismiyle bir class ekledik.
+
+2- ETrade.Entity içerisine Abstracts ve Concretes isimleriyle iki yeni klasör ekledik.
+
+3- ETrade.Core içerisine IBaseRepository interface'i ve BaseRepository class'ı eklendi.
+
+4- Etrade.Repos içerisine Abstracts ve Concretes isimleriyle iki klasör oluşturuldu.
+
+5- ETrade..Uow içerisine IUnitofWork ismiyle bir interface ve UnitofWork ismiyle bir class eklendi.
+
+6- Program cs ye tüm tablolar girildi.
+
+builder.Services.AddScoped<IBasketDetailRep, BasketDetailRep<BasketDetail>>();
+builder.Services.AddScoped<IBasketMasterRep, BasketMasterRep<BasketMaster>>();
+builder.Services.AddScoped<ICategoriesRep, CategoriesRep<Categories>>();
+builder.Services.AddScoped<ICityRep, CityRep<City>>();
+builder.Services.AddScoped<ICountyRep, CountyRep<County>>();
+builder.Services.AddScoped<IProductsRep, ProductsRep<Products>>();
+builder.Services.AddScoped<ISuppliersRep, SuppliersRep<Suppliers>>();
+builder.Services.AddScoped<IUnitRep, UnitRep<Unit>>();
+builder.Services.AddScoped<IVatRep, VatRep<Vat>>();
+builder.Services.AddScoped<IUsersRep, UsersRep<Users>>();
+builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
+
+7- ETrade.Dal TradeContext'e çift foreign key ve dbsetler eklendi.
+
+    public class TradeContext : DbContext
+    {
+        public TradeContext(DbContextOptions<TradeContext> db) : base(db)
+        {
+        }
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<BasketDetail>()
+                .HasKey(b => new { b.Id, b.ProductId });     //compositeKey
+
+
+        }
+        public DbSet<City> City { get; set; }
+        public DbSet<County> County { get; set; }
+        public DbSet<BasketDetail> BasketDetail { get; set; }
+        public DbSet<BasketMaster> BasketMaster { get; set; }
+        public DbSet<Categories> Categories { get; set; }
+        public DbSet<Products> Products{ get; set; }
+        public DbSet<Suppliers> Suppliers { get; set; }
+        public DbSet<Unit> Unit { get; set; }
+        public DbSet<Users> Users { get; set; }
+        public DbSet<Vat> Vat { get; set; }
+    }
+
+8- Migration yapılır cascadeler NoAction yapılır. Daha sonra Update-Database yapılır.
+
+9- City, Unit ve Categories controller lar yapıldı. Modelleri program cs'ye eklendi.
+
+10- Layout, Auth controller için düzenlendi.
+
+                        <li class="nav-item">
+                            <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Index">Home</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link text-dark" asp-area="" asp-controller="Auth" asp-action="Register">Üye Ol</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link text-dark" asp-area="" asp-controller="Auth" asp-action="Login">Giriş</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link text-dark" asp-area="" asp-controller="Auth" asp-action="Logout">Çıkış</a>
+                        </li>
+
+11- Home controller içerisine IActionResult Error metodu yazıldı.
+
+        public IActionResult Error(string Msg)
+        {
+            ViewBag.Msg=Msg;
+            return View();
+        }
+
+view yaratıldı.
+
+@model string
+
+<h1>@ViewBag.Msg</h1>
+
+12- IUserRep içine Users CreateUser(Users u); eklendi.
+
+13- UserRep içinde metod yazıldı. ETrade.Repos içine BCrypt.Net-Next nuget paket yüklendi.
+
+        public Users CreateUser(Users u)
+        {
+            Users selectedUser = _db.Set<Users>().FirstOrDefault(x => x.Mail == u.Mail);   //key olmak zorunda değil Find() deseydik key olmalıydı
+            if (selectedUser == null)
+            {
+                u.Password = BCrypt.Net.BCrypt.HashPassword(u.Password);
+                u.Error = false;
+            }
+            else { u.Error = true; }
+            return u;
+
+        }
+
+14- Auth controller içine IActionResult Register tanımlandı.
+
+        public IActionResult Register()
+        {
+            _model.User = new Users();
+            _model.Counties = _uow._countyRep.List();
+            return View(_model);
+        }
+        [HttpPost]
+        public IActionResult Register(UsersModel? m)
+        {
+            m.User = _uow._usersRep.CreateUser(m.User);
+            if (m.User.Error == true)  //hata
+            {
+
+                m.Counties = _uow._countyRep.List();
+                m.Error = $"{m.User.Mail} Kullanıcı mevcut!";
+                return View(m);
+                //return RedirectToAction("Error", "Home", new { Msg = $"{m.User.Mail} Kullanıcı mevcut!" });
+            }
+            else
+            {
+                m.User.Role = "User";
+                _uow._usersRep.Add(m.User);
+                _uow.Commit();
+                return RedirectToAction("Error", "Home" , new { Msg = $"{m.User.Mail} Kullanıcı başarıyla kayıt edilmiştir." });
+            }
+
+        }
+
+ @model ETrade.Ul.Models.UsersModel
+ <div class="row">
+     <div class="col-md-7">
+         <form method="post">
+             <p>@Model.Error</p>
+        <div class="mb-3 row">
+            <label class="col-sm-2 col-form-label">Email</label>
+            <div class="col-sm-10">
+                    <input asp-for="User.Mail" required type="text" class="form-control">
+            </div>
+        </div>
+        <div class="mb-3 row">
+            <label class="col-sm-2 col-form-label">Şifre</label>
+            <div class="col-sm-10">
+                    <input asp-for="User.Password" required type="text" class="form-control">
+            </div>
+        </div>
+            <div class="mb-3 row">
+                <label class="col-sm-2 col-form-label">Ad-Soyad/Ünvan</label>
+                <div class="col-sm-10">
+                    <input asp-for="User.EntityName" required type="text" class="form-control">
+                </div>
+            </div>
+            <div class="mb-3 row">
+                <label class="col-sm-2 col-form-label">Cadde</label>
+                <div class="col-sm-10">
+                    <input asp-for="User.Street" type="text" class="form-control">
+                </div>
+            </div>
+            <div class="mb-3 row">
+                <label class="col-sm-2 col-form-label">Sokak</label>
+                <div class="col-sm-10">
+                    <input asp-for="User.Avenue" type="text" class="form-control">
+                </div>
+            </div>
+            <div class="mb-3 row">
+                <label class="col-sm-2 col-form-label">No</label>
+                <div class="col-sm-10">
+                    <input asp-for="User.No" type="text" class="form-control">
+                </div>
+            </div>
+            <div class="mb-3 row">
+                <label class="col-sm-2 col-form-label">İlçe</label>
+                <select asp-for="User.CountyId" class="form-control">
+                    @foreach(var item in Model.Counties)
+                    {
+                        <option value="@item.Id">@item.Description</option>
+                    }
+                    
+               </select>
+            </div>
+            <input class="btn btn-secondary" type="submit" value="Kaydol"/>
+        </form>
+     </div>
+ </div>
+
+
+
+15- IUserRep içerisine UserDTO Login(string username, string password); yaratıldı. ETrade.DTO içerisine User DTO class'ı oluşturuldu.
+
+    public class UserDTO
+    {
+        public int Id { get; set; }
+        public string Mail { get; set; }
+        public string Role { get; set; }
+        public bool Error { get; set; }
+    }
+
+16- UserRep içerisine Login metodu yazıldı.
+
+        public UserDTO Login(string username, string password)
+        {
+            Users selectedUser = _db.Set<Users>().FirstOrDefault(x => x.Mail == username);
+            string passwordHash = BCrypt.Net.BCrypt.HashPassword(password);
+            UserDTO user = new UserDTO();
+            if (selectedUser != null)
+            {
+                bool verified = BCrypt.Net.BCrypt.Verify(password, selectedUser.Password);
+                if(verified == true)
+                {
+                    user.Id = selectedUser.Id;
+                    user.Mail = selectedUser.Mail;
+                    user.Role = selectedUser.Role;
+                    user.Error = false;
+                 
+                }
+                else
+                {
+                    user.Error = true;
+                }
+            }
+            else
+            {
+                user.Error = true;
+            }
+
+            return user;
+        }
+
+17- Program.cs'ye builder.Services.AddSession(x => x.IdleTimeout = TimeSpan.FromHours(5)); ve app.UseSession(); eklendi.
+
+18- Auth controller içine IActionResult içine Login metodu yazıldı.
+
+        public IActionResult Login()
+        {
+            return View();
+        }
+        [HttpPost]
+        public IActionResult Login(string Mail, string Password)
+        {
+            var usr = _uow._usersRep.Login(Mail, Password);
+            if (usr.Error == false)
+            {
+                HttpContext.Session.SetString("User", JsonConvert.SerializeObject(usr));
+                if (usr.Role == "Admin")
+                {
+                    return RedirectToAction("Index", "Admin");
+                }
+                else
+                {
+                    return RedirectToAction("Index", "Home");
+                }
+            }
+            return View();
+        }
+
+      <div class="row">
+    <div class="col-md-7">
+        <form method="post">
+            <div class="mb-3 row">
+                <label class="col-sm-2 col-form-label">Email</label>
+                <div class="col-sm-10">
+                    <input name="Mail" required type="text" class="form-control">
+                </div>
+            </div>
+            <div class="mb-3 row">
+                <label class="col-sm-2 col-form-label">Şifre</label>
+                <div class="col-sm-10">
+                    <input name="Password" required type="text" class="form-control">
+                </div>
+            </div>
+
+            <input class="btn btn-secondary" type="submit" value="Giriş" />
+        </form>
+    </div>
+</div>
+
+
+
+19- Auth controller içerisine Logout metodu yazıldı.
+
+        public IActionResult Logout()
+        {
+            HttpContext.Session.Clear();
+            return RedirectToAction("Index","Home");
+        }
+
+20- Admin Layout oluşturuldu.
+
+                        <li class="nav-item">
+                            <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Index">Home</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link text-dark" asp-area="" asp-controller="Auth" asp-action="Register">Üye Ol</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link text-dark" asp-area="" asp-controller="Auth" asp-action="Index">Admin Giriş</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link text-dark" asp-area="" asp-controller="Auth" asp-action="Logout">Admin Çıkış</a>
+                        </li>
+
+21- Admin Controller oluşturuldu.
+
+    public class AdminController : Controller
+    {
+        public IActionResult Index()
+        {
+            var s = JsonConvert.DeserializeObject<UserDTO>(HttpContext.Session.GetString("User"));
+            ViewBag.User = s.Mail;
+            return View();
+        }
+    }
+
+view
+
+
+@{
+    ViewData["Title"] = "Index";
+    Layout = "~/Views/Shared/_AdminLayout.cshtml";
+}
+
+<h1>Hoşgeldin @ViewBag.User</h1>
+
+23- BasketMaster layout'a eklendi ve  BasketMasterController yapıldı. BasketMaster entity içine bool Completed eklendi. 
+BasketDetail entity ve dal içinde kompozit keyler değiştirildi. Ve yeniden migration yapıldı.
+
+    public class BasketMasterController : Controller
+    {
+        IUnitOfWork _uow;
+        BasketMaster _basketMaster;
+        public BasketMasterController(IUnitOfWork uow , BasketMaster basketMaster)
+        {
+            _uow = uow;
+            _basketMaster = basketMaster;
+        }
+        public IActionResult Create()
+        {
+            var user = JsonConvert.DeserializeObject<UserDTO>(HttpContext.Session.GetString("User"));
+            var selectedMaster = _uow._basketMasterRep.Set().FirstOrDefault(x => x.Completed == false && x.EntityId == user.Id);
+            if(selectedMaster != null)
+            {
+               return RedirectToAction("Add" , "BasketDetail" , new { id = selectedMaster.Id });
+            }
+            else
+            {
+
+                _basketMaster.OrderDate = DateTime.Now;
+                _basketMaster.EntityId = user.Id;
+                _uow._basketMasterRep.Add(_basketMaster);
+                _uow.Commit();
+                return RedirectToAction("Add", "BasketDetail", new { id = _basketMaster.Id });
+            }
+ 
+        }
+    }
+
+24- ProductsDTO oluşturuldu.
+
+namespace ETrade.Dto
+{
+    public class ProductDTO
+    {
+        public int Id { get; set; }
+        public string ProductName { get; set; }
+    }
+}
+
+25- BasketDetailModel oluşturuldu.
+
+namespace ETrade.Ul.Models
+{
+    public class BasketDetailModel
+    {
+        public List<ProductDTO> ProductsDTO { get; set; }
+
+        public decimal UnitPrice { get; set; }
+        public int Amount { get; set; }
+        public decimal Ratio { get; set; }
+        public int UnitId { get; set; }
+
+    }
+}
+
+26- IProductsRep içine metod tanımlandı.
+
+    public interface IProductsRep : IBaseRepository<Products>
+    {
+        List<ProductDTO> GetProductsSelect();
+    }
+
+27- ProductsRep içinde implement edildi.
+
+        public List<ProductDTO> GetProductsSelect()
+        {
+            return Set().Select(x => new ProductDTO { Id = x.Id, ProductName = x.ProductName }).ToList();
+        }
+
+28- BasketDetailController eklendi.
+
+    public class BasketDetailController : Controller
+    {
+        IUnitOfWork _uow;
+        BasketDetail _basketDetail;
+        BasketDetailModel _model;
+        public BasketDetailController(IUnitOfWork uow , BasketDetail basketDetail , BasketDetailModel model)
+        {
+            _uow = uow;
+            _basketDetail = basketDetail;
+            _model = model;
+        }
+        public IActionResult Add(int id)
+        {
+            _model.ProductsDTO = _uow._productsRep.GetProductsSelect();
+            return View(_model);
+        }
+    }
+
+29- Add metodu için view oluşturuldu. Yarın devam edecek
+
+@model ETrade.Ul.Models.BasketDetailModel
+@{
+    ViewData["Title"] = "Add";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<h1>Add</h1>
+
+<div class="row">
+    <div class="col-md-7">
+        <form method="post">
+        <div>
+            <label>Ürün</label>
+            <select name="Id" class="form-control">
+                @foreach (var item in Model.ProductsDTO)
+                {
+                    <option value="@item.Id">@item.ProductName</option>
+                }
+            </select>
+            <label>Miktar</label>
+            <input class="form-control" type="text" asp-for="Amount" />
+        </div>
+        </form>
+    </div>
+</div>
+
+
+

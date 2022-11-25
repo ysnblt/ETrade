@@ -1,0 +1,3 @@
+tabloda her bir sütün için arka planda otomatik index üretir program
+arama yaparken aslında o index içinden arar. örneğin Id si 3 olanı bulmak için
+ıd ler clustered index olarak otomatik yaratılır diğerleri non clustered index tir biz oluştururuz.
